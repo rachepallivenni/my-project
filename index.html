@@ -1,150 +1,196 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>News App</title>
-  <style>
-    body {
-  font-family: 'Segoe UI', sans-serif;
-  margin: 0;
-  padding: 20px;
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-  color: #333;
+<title>Books Data</title>
+
+<style>
+body { font-family: Arial; }
+
+.top-bar {
+  margin-bottom: 10px;
 }
 
-h1 {
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #ccc;
+}
+
+.spinner input {
+  width: 40px;
   text-align: center;
-  color: white;
-  margin-bottom: 30px;
-  letter-spacing: 1px;
+  border: none;
 }
 
-.news-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 25px;
+.spinner button {
+  border: none;
+  background: #eee;
+  cursor: pointer;
+  padding: 2px 6px;
 }
 
-.news-card {
-  background: white;
-  border-radius: 15px;
-  overflow: hidden;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.15);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px;
+}
+
+th {
+  background: #f2f2f2;
   cursor: pointer;
 }
 
-.news-card:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 20px 35px rgba(0,0,0,0.25);
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.news-card img {
-  width: 100%;
-  height: 200px;
-  object-fit: cover;
-}
-
-.news-card h3 {
-  padding: 15px;
-  margin: 0;
-  font-size: 18px;
-  color: #222;
-}
-
-.news-card p {
-  padding: 0 15px 15px 15px;
-  font-size: 14px;
-  color: #555;
-}
-
-.news-card a {
-  display: block;
-  text-align: center;
-  padding: 12px;
-  background: #2a5298;
-  color: white;
-  text-decoration: none;
-  font-weight: bold;
-  transition: background 0.3s ease;
-}
-
-.news-card a:hover {
-  background: #1e3c72;
-}
-
-#loading {
-  text-align: center;
-  font-size: 18px;
-  color: white;
-  margin-bottom: 20px;
-  animation: blink 1.5s infinite;
-}
-
-@keyframes blink {
-  0% { opacity: 1; }
-  50% { opacity: 0.4; }
-  100% { opacity: 1; }
-}
-
-  </style>
+.desc { width: 180px; }
+.url { width: 160px; }
+.small { width: 80px; }
+</style>
 </head>
+
 <body>
 
-  <h1>📰 Latest News</h1>
-  <div id="loading">Loading news...</div>
-  <div class="news-container" id="newsContainer"></div>
+<h3>Books Data</h3>
 
-  <script>
-      async function getNews() {
-  const apiKey = "6dd2e714b2c11ff3f741b0317ebc749a";   
-  const url = `https://gnews.io/api/v4/top-headlines?country=in&lang=en&max=10&apikey=${apiKey}`;
+<div class="top-bar">
+  Page
+  <span class="spinner">
+    <button onclick="changePage(-1)">▲</button>
+    <input id="pageInput" value="1" readonly>
+    <button onclick="changePage(1)">▼</button>
+  </span>
+  (10 books per page)
 
-  const newsContainer = document.getElementById("newsContainer");
-  const loading = document.getElementById("loading");
+  <input type="text" placeholder="Search..." onkeyup="search(this.value)">
+</div>
 
-  try {
-    const response = await fetch(url);
+<table>
+<thead>
+<tr>
+  <th onclick="sort('title')">Title <span id="title"></span></th>
+  <th onclick="sort('isbn')">ISBN <span id="isbn"></span></th>
+  <th onclick="sort('pageCount')">Pages <span id="pageCount"></span></th>
+  <th onclick="sort('publishedDate')">Published <span id="publishedDate"></span></th>
+  <th>Thumbnail</th>
+  <th>Short Desc</th>
+  <th>Long Desc</th>
+  <th onclick="sort('status')">Status <span id="status"></span></th>
+  <th>Authors</th>
+  <th>Categories</th>
+  <th onclick="sort('price')">Price <span id="price"></span></th>
+  <th onclick="sort('currency')">Currency <span id="currency"></span></th>
+  <th onclick="sort('discount')">Discount <span id="discount"></span></th>
+  <th onclick="sort('discountUnits')">Discount Units <span id="discountUnits"></span></th>
+</tr>
+</thead>
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch news");
-    }
+<tbody id="tbody"></tbody>
+</table>
 
-    const data = await response.json();
+<p id="info"></p>
 
-    console.log(data); // For debugging
+<script>
+const url =
+"https://raw.githubusercontent.com/edupoly/mongodb-data-sets/main/books.json";
 
-    loading.style.display = "none";
-    newsContainer.innerHTML = ""; // Clear old content
+let books = [];
+let filtered = [];
+let page = 1;
+let limit = 10;
+let sortKey = "";
+let dir = 1;
 
-    if (!data.articles || data.articles.length === 0) {
-      newsContainer.innerHTML = "<p>No news found.</p>";
-      return;
-    }
+fetch(url)
+.then(res => res.json())
+.then(data => {
+  books = data;
+  filtered = data;
+  show();
+});
 
-    data.articles.forEach(article => {
-      const newsCard = document.createElement("div");
-      newsCard.classList.add("news-card");
+function show() {
+  let start = (page - 1) * limit;
+  let end = start + limit;
+  let rows = filtered.slice(start, end);
 
-      newsCard.innerHTML = `
-        <img src="${article.image || ''}" alt="News Image">
-        <h3>${article.title}</h3>
-        <p>${article.description || ''}</p>
-        <a href="${article.url}" target="_blank">Read More</a>
-      `;
+  let html = "";
+  rows.forEach(b => {
+    html += `
+    <tr>
+      <td class="truncate">${b.title || ""}</td>
+      <td>${b.isbn || ""}</td>
+      <td>${b.pageCount || ""}</td>
+      <td>${b.publishedDate?.$date?.slice(0,10) || ""}</td>
+      <td class="truncate url">
+        <a href="${b.thumbnailUrl}" target="_blank">${b.thumbnailUrl || ""}</a>
+      </td>
+      <td class="truncate desc">${b.shortDescription || ""}</td>
+      <td class="truncate desc">${b.longDescription || ""}</td>
+      <td>${b.status || ""}</td>
+      <td class="truncate">${(b.authors || []).join(", ")}</td>
+      <td class="truncate">${(b.categories || []).join(", ")}</td>
+      <td class="small">${b.price || ""}</td>
+      <td class="small">${b.currency || ""}</td>
+      <td class="small">${b.discount || ""}</td>
+      <td class="small">${b.discountUnits || ""}</td>
+    </tr>`;
+  });
 
-      newsContainer.appendChild(newsCard);
-    });
+  tbody.innerHTML = html;
 
-  } catch (error) {
-    loading.innerText = "Error loading news.";
-    console.error(error);
-  }
+  let totalPages = Math.ceil(filtered.length / limit);
+  info.innerText = `Page ${page} of ${totalPages}`;
+  pageInput.value = page;
 }
 
-getNews();
+function changePage(step) {
+  let totalPages = Math.ceil(filtered.length / limit);
+  page += step;
 
-  </script>
+  if (page < 1) page = 1;
+  if (page > totalPages) page = totalPages;
+
+  show();
+}
+
+function search(val) {
+  filtered = books.filter(b =>
+    JSON.stringify(b).toLowerCase().includes(val.toLowerCase())
+  );
+  page = 1;
+  show();
+}
+
+function sort(key) {
+  dir = sortKey === key ? -dir : 1;
+  sortKey = key;
+
+  filtered.sort((a, b) => {
+    let x = a[key] || "";
+    let y = b[key] || "";
+    if (Array.isArray(x)) x = x.join(",");
+    if (Array.isArray(y)) y = y.join(",");
+    return x.toString().localeCompare(y.toString()) * dir;
+  });
+
+  document.querySelectorAll("th span").forEach(s => s.innerText = "");
+  if (document.getElementById(key)) {
+    document.getElementById(key).innerText = dir === 1 ? " ↑" : " ↓";
+  }
+
+  show();
+}
+</script>
 
 </body>
 </html>
-
